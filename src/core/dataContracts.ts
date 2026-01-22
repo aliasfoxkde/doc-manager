@@ -402,7 +402,7 @@ export const documentQualityChecks: QualityCheck<any>[] = [
 // PLACEHOLDER DETECTION PATTERNS
 // =============================================================================
 
-const PLACEHOLDER_TITLE_PATTERN = /^(untitled|new \w+|sample|example|test|template|placeholder|dummy|\[.*?\]|<.*?>|{{.*?}}|TODO|FIXME|XXX)$/i;
+const PLACEHOLDER_TITLE_PATTERN = /^(untitled|new \w+|sample|example|template|placeholder|dummy|\[.*?\]|<.*?>|{{.*?}}|TODO|FIXME|XXX)$/i;
 
 const PLACEHOLDER_TAG_PATTERN = /^(untagged|uncategorized|general|misc|other|test|sample)$/i;
 

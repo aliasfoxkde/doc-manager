@@ -23,22 +23,28 @@ async function getAllDocuments(): Promise<DocumentMetadata[]> {
   // Try to fetch from file watcher
   try {
     const watcherFiles = await fileWatcherClient.getAllFiles();
-    const docsFromWatcher: DocumentMetadata[] = watcherFiles.map((file) => ({
-      id: `fw-${file.id}`,
-      title: file.filename.replace(/\.[^/.]+$/, ''), // Remove extension
-      type: file.type,
-      createdAt: file.created,
-      updatedAt: file.modified,
-      size: file.size,
-      tags: [],
-      path: `${file.category}/${file.filename}`,
-      isSynced: true,
-      source: 'filewatcher' as any
-    }));
+    const docsFromWatcher: DocumentMetadata[] = watcherFiles.map((file) => {
+      // Generate a valid ID: remove extension from filename, then replace slashes with dashes
+      const filenameWithoutExt = file.filename.replace(/\.[^/.]+$/, '');
+      const safeId = `${file.category}/${filenameWithoutExt}`.replace(/\//g, '-');
+      return {
+        id: `fw-${safeId}`,
+        title: filenameWithoutExt,
+        type: file.type,
+        createdAt: file.created,
+        updatedAt: file.modified,
+        size: file.size,
+        tags: undefined, // Use undefined instead of empty array to avoid placeholder detection
+        path: `${file.category}/${file.filename}`,
+        // Store filename with extension for reconstruction
+        filename: file.filename,
+        isSynced: true,
+        source: 'filewatcher' as any
+      };
+    });
 
-    // Merge both sources, preferring file watcher versions for files that exist in both
+    // Merge both sources
     const mergedDocs = [...docsFromWatcher];
-    const watcherIds = new Set(watcherFiles.map(f => `fw-${f.id}`));
 
     for (const dbDoc of docsFromDB) {
       // Only add DB docs that aren't from file watcher
@@ -58,29 +64,45 @@ async function getDocument(id: string): Promise<Document> {
   // Check if it's from file watcher (starts with fw-)
   if (id.startsWith('fw-')) {
     const fileWatcherId = id.substring(3); // Remove fw- prefix
-    const parts = fileWatcherId.split('/');
+    // Convert back: replace dashes with slashes only
+    const originalId = fileWatcherId.replace(/-/g, '/');
+    const parts = originalId.split('/');
     const category = parts[0];
-    const filename = parts.slice(1).join('/');
+    const filenameWithoutExt = parts.slice(1).join('/');
+
+    // Get the document metadata to find the actual filename
+    const db = await dbPromise;
+    const cached = await db.get(STORE_NAME, id);
+
+    // Use stored filename if available, otherwise reconstruct from type
+    const cachedFilename = (cached?.metadata as any)?.filename;
+    const docType = cached?.metadata?.type || 'markdown';
+    const filename = cachedFilename || `${filenameWithoutExt}.${getTypeExtension(docType)}`;
 
     const fileData = await fileWatcherClient.getFile(category, filename);
 
     // Convert to Document format
-    const docType = filename.split('.').pop() || 'markdown';
-    return {
+    const doc: Document = {
       metadata: {
         id: `fw-${fileWatcherId}`,
-        title: filename.replace(/\.[^/.]+$/, ''),
+        title: filenameWithoutExt,
         type: docType as any,
         createdAt: fileData.metadata.created,
         updatedAt: fileData.metadata.modified,
         size: fileData.metadata.size,
-        tags: [],
+        tags: undefined,
         path: `${category}/${filename}`,
+        filename: filename,
         isSynced: true,
         source: 'filewatcher' as any
       },
       content: fileData.content
     };
+
+    // Cache the document in IndexedDB for faster access later
+    await db.put(STORE_NAME, doc);
+
+    return doc;
   }
 
   // Otherwise get from IndexedDB
@@ -88,6 +110,18 @@ async function getDocument(id: string): Promise<Document> {
   const doc = await db.get(STORE_NAME, id);
   if (!doc) throw new Error('Document not found');
   return doc;
+}
+
+// Helper: Get file extension from document type
+function getTypeExtension(type: string): string {
+  switch (type) {
+    case 'markdown': return 'md';
+    case 'html': return 'html';
+    case 'json': return 'json';
+    case 'yaml': return 'yaml';
+    case 'xml': return 'xml';
+    default: return 'txt';
+  }
 }
 
 async function createDocument(title: string, type: string): Promise<Document> {
