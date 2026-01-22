@@ -17,7 +17,6 @@ export default function Tasks() {
     addTask,
     toggleTask,
     deleteTask,
-    updateTask,
     addList,
     deleteList,
     setActiveList,

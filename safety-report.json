@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-01-22T19:03:31.288Z",
+  "summary": {
+    "filesScanned": 19,
+    "issuesFound": 3,
+    "byCategory": {
+      "console": 3
+    }
+  },
+  "errors": [],
+  "warnings": [
+    {
+      "message": "console.error() detected - use observability instead",
+      "file": "src/components/DocumentEditor.tsx",
+      "line": 61,
+      "category": "console"
+    },
+    {
+      "message": "console.error() detected - use observability instead",
+      "file": "src/components/DocumentEditor.tsx",
+      "line": 77,
+      "category": "console"
+    },
+    {
+      "message": "console.error() detected - use observability instead",
+      "file": "src/components/DocumentEditor.tsx",
+      "line": 88,
+      "category": "console"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useThemeStore } from './stores/themeStore';
 import Layout from './components/Layout';
@@ -11,7 +12,7 @@ import SyncStatus from './components/SyncStatus';
 function App() {
   const { theme } = useThemeStore();
 
-  React.useEffect(() => {
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 

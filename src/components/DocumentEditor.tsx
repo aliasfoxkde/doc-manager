@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentStore } from '../stores/documentStore';
 import Editor from '@monaco-editor/react';
 import * as documentService from '../services/documentService';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 export default function DocumentEditor() {
   const { id } = useParams<{ id?: string }>();
@@ -42,6 +45,7 @@ export default function DocumentEditor() {
     if (!content.trim()) return;
 
     setIsSaving(true);
+    const span = obs.startSpan('DocumentEditor.handleSave');
     try {
       if (currentDocument || id) {
         await saveDocument({
@@ -58,13 +62,15 @@ export default function DocumentEditor() {
       }
       setHasUnsavedChanges(false);
     } catch (error) {
-      console.error('Failed to save:', error);
+      obs.error('Failed to save document', error as Error);
     } finally {
+      obs.endSpan(span);
       setIsSaving(false);
     }
   }, [content, title, type, currentDocument, id, saveDocument, createDocument, navigate]);
 
   const handleOpenLocal = async () => {
+    const span = obs.startSpan('DocumentEditor.handleOpenLocal');
     try {
       const doc = await documentService.openLocalFile();
       if (doc) {
@@ -74,18 +80,23 @@ export default function DocumentEditor() {
         setHasUnsavedChanges(true);
       }
     } catch (error) {
-      console.error('Failed to open file:', error);
+      obs.error('Failed to open local file', error as Error);
+    } finally {
+      obs.endSpan(span);
     }
   };
 
   const handleSaveLocal = async () => {
+    const span = obs.startSpan('DocumentEditor.handleSaveLocal');
     try {
       await documentService.saveLocalFile({
         metadata: { ...currentDocument!.metadata, title, type },
         content
       });
     } catch (error) {
-      console.error('Failed to save locally:', error);
+      obs.error('Failed to save file locally', error as Error);
+    } finally {
+      obs.endSpan(span);
     }
   };
 

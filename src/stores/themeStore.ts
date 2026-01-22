@@ -6,7 +6,7 @@ interface ThemeState {
   resolvedTheme: 'dark' | 'light';
 }
 
-export const useThemeStore = create<ThemeState>((set, get) => ({
+export const useThemeStore = create<ThemeState>((set) => ({
   theme: (localStorage.getItem('doc-manager-theme') as 'dark' | 'light' | 'system') || 'system',
   setTheme: (theme) => {
     localStorage.setItem('doc-manager-theme', theme);
@@ -17,6 +17,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     if (stored === 'system') {
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
-    return stored;
+    return stored as 'dark' | 'light';
   })()
 }));

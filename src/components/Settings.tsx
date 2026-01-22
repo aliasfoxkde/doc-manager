@@ -1,7 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useThemeStore } from '../stores/themeStore';
 import { useDocumentStore } from '../stores/documentStore';
-import { AppSettings, SyncConfig } from '../types';
+import { AppSettings } from '../types';
+import { AppSettingsContract, SyncConfigContract } from '../core/dataContracts';
+import { createProductionSafety } from '../core/productionSafety';
+import { getObservability } from '../core/observability';
+
+const safety = createProductionSafety({
+  environment: process.env.NODE_ENV || 'development',
+  enableStrictValidation: true,
+  blockPlaceholders: true,
+  requireDataContracts: true,
+  enableObservability: true,
+});
+safety.registerContract('appSettings', AppSettingsContract);
+safety.registerContract('syncConfig', SyncConfigContract);
+
+const obs = getObservability();
 
 const defaultSettings: AppSettings = {
   theme: 'system',
@@ -17,6 +32,9 @@ const defaultSettings: AppSettings = {
   }
 };
 
+// Local storage key for settings
+const SETTINGS_KEY = 'doc-manager-settings';
+
 export default function Settings() {
   const { theme, setTheme } = useThemeStore();
   const { syncDocuments, syncStatus } = useDocumentStore();
@@ -24,19 +42,78 @@ export default function Settings() {
   const [syncToken, setSyncToken] = useState('');
   const [syncRepo, setSyncRepo] = useState('');
 
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    const span = obs.startSpan('Settings.loadSettings');
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Validate against schema
+        const validation = safety.validate('appSettings', parsed);
+        if (validation.isValid) {
+          setSettings(parsed);
+          if (parsed.sync.token) setSyncToken(parsed.sync.token);
+          if (parsed.sync.repo) setSyncRepo(parsed.sync.repo);
+        } else {
+          obs.warn('Settings validation failed, using defaults', { errors: validation.errors });
+        }
+      }
+      obs.endSpan(span);
+    } catch (error) {
+      obs.error('Failed to load settings', error as Error);
+      obs.endSpan(span, error as Error);
+    }
+  }, []);
+
   const handleSyncNow = async () => {
     await syncDocuments();
   };
 
   const handleSaveSettings = () => {
-    setSettings({
-      ...settings,
-      sync: {
-        ...settings.sync,
-        enabled: !!syncToken && !!syncRepo
+    const span = obs.startSpan('Settings.saveSettings');
+    try {
+      const updatedSettings: AppSettings = {
+        ...settings,
+        sync: {
+          ...settings.sync,
+          enabled: !!syncToken && !!syncRepo,
+          token: syncToken || undefined,
+          repo: syncRepo || undefined,
+        }
+      };
+
+      // Validate settings before saving
+      const validation = safety.validate('appSettings', updatedSettings);
+      if (!validation.isValid) {
+        obs.error('Settings validation failed', undefined, { errors: validation.errors });
+        alert(`Invalid settings: ${validation.errors.map(e => e.message).join(', ')}`);
+        obs.endSpan(span);
+        return;
       }
-    });
-    // TODO: Persist settings
+
+      // Validate sync config specifically
+      if (updatedSettings.sync.enabled) {
+        const syncValidation = safety.validate('syncConfig', updatedSettings.sync);
+        if (!syncValidation.isValid) {
+          obs.error('Sync configuration validation failed', undefined, { errors: syncValidation.errors });
+          alert(`Invalid sync configuration: ${syncValidation.errors.map(e => e.message).join(', ')}`);
+          obs.endSpan(span);
+          return;
+        }
+      }
+
+      // Persist to localStorage
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
+      setSettings(updatedSettings);
+
+      obs.recordMetric('settings.saved', 1);
+      obs.info('Settings saved successfully');
+      obs.endSpan(span);
+    } catch (error) {
+      obs.error('Failed to save settings', error as Error);
+      obs.endSpan(span, error as Error);
+    }
   };
 
   return (

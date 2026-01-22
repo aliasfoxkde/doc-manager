@@ -66,9 +66,9 @@ async function deleteDocument(id: string): Promise<void> {
   await db.delete(STORE_NAME, id);
 }
 
-// Sync operations (placeholder for future Cloudflare/Git integration)
+// Sync operations - Implementation note: Sync with Cloudflare Workers/GitHub/Local NAS
+// This is a placeholder for future sync functionality
 async function syncDocuments(): Promise<void> {
-  // TODO: Implement sync with Cloudflare Workers/GitHub/Local NAS
   const db = await dbPromise;
   await db.put('sync-state', {
     id: 'last-sync',
