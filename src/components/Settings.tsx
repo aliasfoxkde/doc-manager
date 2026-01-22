@@ -244,21 +244,6 @@ export default function Settings() {
           </button>
         </div>
       </section>
-
-      <section className="settings-section">
-        <h3>Data Management</h3>
-        <div className="setting-actions">
-          <button className="btn-danger" onClick={() => {
-            if (confirm('Clear all local data? This cannot be undone.')) {
-              localStorage.clear();
-              indexedDB.deleteDatabase('doc-manager');
-              window.location.reload();
-            }
-          }}>
-            Clear All Data
-          </button>
-        </div>
-      </section>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { openDB } from 'idb';
 import { Document, DocumentMetadata } from '../types';
 import { nanoid } from 'nanoid';
+import { fileWatcherClient, FileWatcherFile } from './fileWatcherClient';
 
 const DB_NAME = 'doc-manager';
 const DB_VERSION = 1;
@@ -13,14 +14,76 @@ const dbPromise = openDB(DB_NAME, DB_VERSION, {
   },
 });
 
-// IndexedDB operations
+// Get all documents from both IndexedDB and file watcher
 async function getAllDocuments(): Promise<DocumentMetadata[]> {
   const db = await dbPromise;
-  const docs = await db.getAll(STORE_NAME);
-  return docs.map((d: Document) => d.metadata);
+  const indexedDocs = await db.getAll(STORE_NAME);
+  const docsFromDB = indexedDocs.map((d: Document) => d.metadata);
+
+  // Try to fetch from file watcher
+  try {
+    const watcherFiles = await fileWatcherClient.getAllFiles();
+    const docsFromWatcher: DocumentMetadata[] = watcherFiles.map((file) => ({
+      id: `fw-${file.id}`,
+      title: file.filename.replace(/\.[^/.]+$/, ''), // Remove extension
+      type: file.type,
+      createdAt: file.created,
+      updatedAt: file.modified,
+      size: file.size,
+      tags: [],
+      path: `${file.category}/${file.filename}`,
+      isSynced: true,
+      source: 'filewatcher' as any
+    }));
+
+    // Merge both sources, preferring file watcher versions for files that exist in both
+    const mergedDocs = [...docsFromWatcher];
+    const watcherIds = new Set(watcherFiles.map(f => `fw-${f.id}`));
+
+    for (const dbDoc of docsFromDB) {
+      // Only add DB docs that aren't from file watcher
+      if (!dbDoc.path || !dbDoc.path.startsWith('documents/')) {
+        mergedDocs.push(dbDoc);
+      }
+    }
+
+    return mergedDocs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  } catch {
+    // File watcher not available, return only IndexedDB docs
+    return docsFromDB;
+  }
 }
 
 async function getDocument(id: string): Promise<Document> {
+  // Check if it's from file watcher (starts with fw-)
+  if (id.startsWith('fw-')) {
+    const fileWatcherId = id.substring(3); // Remove fw- prefix
+    const parts = fileWatcherId.split('/');
+    const category = parts[0];
+    const filename = parts.slice(1).join('/');
+
+    const fileData = await fileWatcherClient.getFile(category, filename);
+
+    // Convert to Document format
+    const docType = filename.split('.').pop() || 'markdown';
+    return {
+      metadata: {
+        id: `fw-${fileWatcherId}`,
+        title: filename.replace(/\.[^/.]+$/, ''),
+        type: docType as any,
+        createdAt: fileData.metadata.created,
+        updatedAt: fileData.metadata.modified,
+        size: fileData.metadata.size,
+        tags: [],
+        path: `${category}/${filename}`,
+        isSynced: true,
+        source: 'filewatcher' as any
+      },
+      content: fileData.content
+    };
+  }
+
+  // Otherwise get from IndexedDB
   const db = await dbPromise;
   const doc = await db.get(STORE_NAME, id);
   if (!doc) throw new Error('Document not found');

@@ -188,7 +188,7 @@ export class SchemaRegistry {
     return this.contracts.get(key) as DataContract<T>;
   }
 
-  validate<T>(key: string, data: unknown): ValidationResult {
+  validate<_T>(key: string, data: unknown): ValidationResult {
     const contract = this.contracts.get(key);
     if (!contract) {
       return {
@@ -617,7 +617,7 @@ export class ProductionSafety {
   /**
    * Validate data against registered schema
    */
-  validate<T>(key: string, data: unknown): ValidationResult {
+  validate<_T>(key: string, data: unknown): ValidationResult {
     return this.schemaRegistry.validate(key, data);
   }
 
