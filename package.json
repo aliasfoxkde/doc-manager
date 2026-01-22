@@ -1,0 +1,41 @@
+{
+  "name": "doc-manager",
+  "version": "1.0.0",
+  "description": "Document Management PWA with local editing, cloud sync, and multi-platform support",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^5.0.2",
+    "monaco-editor": "^0.52.0",
+    "@monaco-editor/react": "^4.6.0",
+    "idb": "^8.0.0",
+    "date-fns": "^4.1.0",
+    "nanoid": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.3",
+    "vite-plugin-pwa": "^0.21.1",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
