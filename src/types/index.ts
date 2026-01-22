@@ -68,3 +68,23 @@ export interface RepoSummary {
   functionalityScore: number;
   needsCleanup: boolean;
 }
+
+// Task types
+export interface Task {
+  id: string;
+  title: string;
+  listId: string;
+  completed: boolean;
+  priority: 'low' | 'medium' | 'high';
+  createdAt: string;
+  dueDate: string | null;
+  notes?: string;
+  tags?: string[];
+}
+
+export interface TaskList {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}

@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import DocumentEditor from './components/DocumentEditor';
 import DocumentList from './components/DocumentList';
 import Settings from './components/Settings';
+import Tasks from './components/Tasks';
 import SyncStatus from './components/SyncStatus';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
         <Route path="/documents" element={<DocumentList />} />
         <Route path="/documents/:id" element={<DocumentEditor />} />
         <Route path="/new" element={<DocumentEditor />} />
+        <Route path="/tasks" element={<Tasks />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

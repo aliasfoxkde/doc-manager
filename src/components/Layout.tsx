@@ -4,6 +4,7 @@ import { useDocumentStore } from '../stores/documentStore';
 const navItems = [
   { path: '/', label: 'Dashboard', icon: '🏠' },
   { path: '/documents', label: 'Documents', icon: '📄' },
+  { path: '/tasks', label: 'Tasks', icon: '✅' },
   { path: '/settings', label: 'Settings', icon: '⚙️' }
 ];
 
