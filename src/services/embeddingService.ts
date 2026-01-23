@@ -5,6 +5,9 @@
  */
 
 import { pipeline, env } from '@xenova/transformers';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 // Configure transformers.js to use local models
 env.allowLocalModels = true;
@@ -42,20 +45,20 @@ class EmbeddingService {
 
     this.initPromise = (async () => {
       try {
-        console.log('[Embedding] Initializing model:', MODEL_NAME);
+        obs.info(`[Embedding] Initializing model: ${MODEL_NAME}`);
         this.extractor = await pipeline('feature-extraction', MODEL_NAME, {
           progress_callback: (progress: any) => {
             if (progress.status === 'downloading') {
-              console.log(`[Embedding] Downloading: ${progress.file} (${progress.progress?.toFixed(1)}%)`);
+              obs.debug(`[Embedding] Downloading: ${progress.file} (${progress.progress?.toFixed(1)}%)`);
             } else if (progress.status === 'loading') {
-              console.log(`[Embedding] Loading: ${progress.file}`);
+              obs.debug(`[Embedding] Loading: ${progress.file}`);
             }
           }
         });
         this.initialized = true;
-        console.log('[Embedding] Model initialized successfully');
+        obs.info('[Embedding] Model initialized successfully');
       } catch (error) {
-        console.error('[Embedding] Failed to initialize:', error);
+        obs.error('[Embedding] Failed to initialize', error as Error);
         throw error;
       }
     })();
@@ -84,7 +87,7 @@ class EmbeddingService {
       const embedding = new Float32Array(output.tolist());
       return embedding;
     } catch (error) {
-      console.error('[Embedding] Failed to embed text:', error);
+      obs.error('[Embedding] Failed to embed text', error as Error);
       throw error;
     }
   }

@@ -3,6 +3,9 @@
  * Connects to the file watcher service to fetch files from the docs/ folder
  */
 
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 const API_BASE = 'http://192.168.1.201:3100/api';
 
 export interface FileWatcherFile {
@@ -126,5 +129,5 @@ export const fileWatcherClient = new FileWatcherClient();
 
 // Auto-check availability on import
 fileWatcherClient.checkAvailable().catch(() => {
-  console.warn('[FileWatcher] Service not available - using IndexedDB only');
+  obs.warn('[FileWatcher] Service not available - using IndexedDB only');
 });

@@ -144,9 +144,20 @@ class FileWatcherService {
 
         for (const entry of entries) {
           if (entry.isFile()) {
-            const filePath = path.join(categoryPath, entry.name);
+            const filename = entry.name;
+
+            // Skip hidden files (starting with dot) and swap/backup files
+            if (filename.startsWith('.') ||
+                filename.endsWith('.swp') ||
+                filename.endsWith('.swo') ||
+                filename.endsWith('~') ||
+                filename.endsWith('.tmp')) {
+              continue;
+            }
+
+            const filePath = path.join(categoryPath, filename);
             const stats = await fs.stat(filePath);
-            const cacheKey = `${category}/${entry.name}`;
+            const cacheKey = `${category}/${filename}`;
 
             // Read file content for cache
             let content = fileCache.get(cacheKey)?.content;
@@ -167,13 +178,13 @@ class FileWatcherService {
             }
 
             // Detect file type
-            const ext = path.extname(entry.name).toLowerCase();
-            const type = this.detectFileType(entry.name, content);
+            const ext = path.extname(filename).toLowerCase();
+            const type = this.detectFileType(filename, content);
 
             files.push({
               id: cacheKey,
               category,
-              filename: entry.name,
+              filename: filename,
               type,
               size: stats.size,
               modified: stats.mtime,

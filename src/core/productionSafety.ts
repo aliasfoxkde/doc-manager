@@ -93,8 +93,8 @@ export const PLACEHOLDER_PATTERNS = {
   XXX: /\/\/\s*XXX[:\s]|\/\*\*?\s*XXX[:\s]/gi,
   HACK: /\/\/\s*HACK[:\s]|\/\*\*?\s*HACK[:\s]/gi,
 
-  // Mock data indicators
-  MOCK_VALUE: /(mock|test|dummy|fake|placeholder|sample).*data?/gi,
+  // Mock data indicators - only match if followed by data or _data (not words like Test2)
+  MOCK_VALUE: /^(mock|dummy|fake|placeholder|sample|testdata|test_data|mockdata|sampledata)$/gi,
   LOREM_IPSUM: /lorem\s+ipsum/gi,
   EXAMPLE_EMAIL: /(example@test\.com|test@example\.com|user@example)/gi,
   EXAMPLE_PHONE: /(555-?\d{4}|1-555-?\d{4})/g,

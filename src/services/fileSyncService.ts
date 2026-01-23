@@ -4,7 +4,10 @@
  * Enables git-based version control and NAS access
  */
 
-import { openDB, DBSchema } from 'idb';
+import { openDB } from 'idb';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 interface Document {
   id: string;
@@ -81,7 +84,7 @@ class FileSyncService {
         this.config = { ...this.config, ...JSON.parse(saved) };
       }
     } catch (error) {
-      console.error('[FileSync] Failed to load config:', error);
+      obs.error('[FileSync] Failed to load config', error as Error);
     }
   }
 
@@ -92,7 +95,7 @@ class FileSyncService {
     try {
       localStorage.setItem('fileSyncConfig', JSON.stringify(this.config));
     } catch (error) {
-      console.error('[FileSync] Failed to save config:', error);
+      obs.error('[FileSync] Failed to save config', error as Error);
     }
   }
 
@@ -155,7 +158,7 @@ class FileSyncService {
         this.sync();
       }, this.config.syncInterval);
 
-      console.log('[FileSync] Auto-sync started, interval:', this.config.syncInterval);
+      obs.info(`[FileSync] Auto-sync started, interval: ${this.config.syncInterval}`);
     }
   }
 
@@ -166,7 +169,7 @@ class FileSyncService {
     if (this.syncTimer !== null) {
       clearInterval(this.syncTimer);
       this.syncTimer = null;
-      console.log('[FileSync] Auto-sync stopped');
+      obs.info('[FileSync] Auto-sync stopped');
     }
   }
 
@@ -175,12 +178,12 @@ class FileSyncService {
    */
   async sync(): Promise<void> {
     if (this.status.inProgress) {
-      console.log('[FileSync] Sync already in progress');
+      obs.debug('[FileSync] Sync already in progress');
       return;
     }
 
     if (!this.config.enabled) {
-      console.log('[FileSync] Sync is disabled');
+      obs.debug('[FileSync] Sync is disabled');
       return;
     }
 
@@ -188,7 +191,7 @@ class FileSyncService {
     this.notifyListeners();
 
     try {
-      console.log('[FileSync] Starting sync...');
+      obs.info('[FileSync] Starting sync...');
 
       // Get all documents from IndexedDB
       const documents = await this.getAllDocuments();
@@ -204,7 +207,7 @@ class FileSyncService {
           await this.syncDocument(doc);
           this.status.synced++;
         } catch (error) {
-          console.error(`[FileSync] Failed to sync document ${doc.id}:`, error);
+          obs.error(`[FileSync] Failed to sync document ${doc.id}`, error as Error);
           this.status.failed++;
         }
         this.notifyListeners();
@@ -214,12 +217,9 @@ class FileSyncService {
       this.config.lastSync = this.status.lastSync;
       this.saveConfig();
 
-      console.log('[FileSync] Sync complete:', {
-        synced: this.status.synced,
-        failed: this.status.failed
-      });
+      obs.info(`[FileSync] Sync complete: ${this.status.synced} synced, ${this.status.failed} failed`);
     } catch (error) {
-      console.error('[FileSync] Sync failed:', error);
+      obs.error('[FileSync] Sync failed', error as Error);
     } finally {
       this.status.inProgress = false;
       this.status.pending = 0;
@@ -267,7 +267,7 @@ class FileSyncService {
     syncRecords[document.id] = syncRecord;
     localStorage.setItem('fileSyncRecords', JSON.stringify(syncRecords));
 
-    console.log(`[FileSync] Synced: ${document.metadata.title} -> ${filePath}`);
+    obs.debug(`[FileSync] Synced: ${document.metadata.title} -> ${filePath}`);
   }
 
   /**
@@ -357,13 +357,14 @@ class FileSyncService {
 
     const db = await openDB('DocManagerDB', 1);
     const tx = db.transaction('documents', 'readwrite');
+    const store = tx.objectStore('documents');
 
     for (const doc of data.documents) {
       try {
-        await tx.put(doc);
+        await store.put(doc);
         imported++;
       } catch (error) {
-        console.error(`[FileSync] Failed to import ${doc.id}:`, error);
+        obs.error(`[FileSync] Failed to import ${doc.id}`, error as Error);
         failed++;
       }
     }
@@ -371,7 +372,7 @@ class FileSyncService {
     await tx.done;
     await db.close();
 
-    console.log(`[FileSync] Import complete: ${imported} imported, ${failed} failed`);
+    obs.info(`[FileSync] Import complete: ${imported} imported, ${failed} failed`);
 
     return { imported, failed };
   }
@@ -386,7 +387,7 @@ class FileSyncService {
       this.startAutoSync();
     }
 
-    console.log('[FileSync] Initialized', this.config);
+    obs.info('[FileSync] Initialized');
   }
 
   /**

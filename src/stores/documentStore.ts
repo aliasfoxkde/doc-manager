@@ -31,6 +31,11 @@ interface DocumentState {
   filteredDocuments: DocumentMetadata[];
   validationErrors: string[];
   safetyEnabled: boolean;
+  viewMode: 'grid' | 'list';
+  filterType: string;
+  filterTags: string[];
+  sortBy: 'date' | 'name' | 'size' | 'type';
+  sortOrder: 'asc' | 'desc';
 
   // Actions
   loadDocuments: () => Promise<void>;
@@ -44,6 +49,10 @@ interface DocumentState {
   validateDocument: (document: Document) => boolean;
   enableSafety: () => void;
   disableSafety: () => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
+  setFilterType: (type: string) => void;
+  setSortBy: (sortBy: 'date' | 'name' | 'size' | 'type') => void;
+  toggleSortOrder: () => void;
 }
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
@@ -56,6 +65,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   filteredDocuments: [],
   validationErrors: [],
   safetyEnabled: true,
+  viewMode: 'list', // Default to list view to see more documents
+  filterType: 'all',
+  filterTags: [],
+  sortBy: 'date',
+  sortOrder: 'desc',
 
   loadDocuments: traced('documentStore.loadDocuments', async () => {
     set({ isLoading: true, error: null, validationErrors: [] });
@@ -107,11 +121,23 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   loadDocument: async (id: string) => {
     set({ isLoading: true, error: null });
+    const span = obs.startSpan('documentStore.loadDocument');
     try {
+      obs.info('Loading document', { id });
       const doc = await documentService.getDocument(id);
+      obs.info('Document loaded successfully', {
+        id: doc.metadata.id,
+        title: doc.metadata.title,
+        hasContent: !!doc.content,
+        contentLength: doc.content.length
+      });
       set({ currentDocument: doc, isLoading: false });
+      obs.endSpan(span);
     } catch (error) {
+      obs.error('Failed to load document', error as Error);
       set({ error: error instanceof Error ? error.message : 'Failed to load document', isLoading: false });
+      obs.endSpan(span, error as Error);
+      throw error;
     }
   },
 
@@ -214,14 +240,28 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   setSearchQuery: (query: string) => {
-    const { documents } = get();
-    const filtered = query
-      ? documents.filter((d) =>
-          d.title.toLowerCase().includes(query.toLowerCase()) ||
-          d.tags?.some((t) => t.toLowerCase().includes(query.toLowerCase()))
-        )
-      : documents;
+    const { documents, filterType, sortBy, sortOrder } = get();
+    const filtered = applyFiltersAndSort(documents, query, filterType, [], sortBy, sortOrder);
     set({ searchQuery: query, filteredDocuments: filtered });
+  },
+
+  setFilterType: (type: string) => {
+    const { documents, searchQuery, sortBy, sortOrder } = get();
+    const filtered = applyFiltersAndSort(documents, searchQuery, type, [], sortBy, sortOrder);
+    set({ filterType: type, filteredDocuments: filtered });
+  },
+
+  setSortBy: (sortBy: 'date' | 'name' | 'size' | 'type') => {
+    const { documents, searchQuery, filterType, sortOrder } = get();
+    const filtered = applyFiltersAndSort(documents, searchQuery, filterType, [], sortBy, sortOrder);
+    set({ sortBy, filteredDocuments: filtered });
+  },
+
+  toggleSortOrder: () => {
+    const { documents, searchQuery, filterType, sortBy, sortOrder } = get();
+    const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    const filtered = applyFiltersAndSort(documents, searchQuery, filterType, [], sortBy, newOrder);
+    set({ sortOrder: newOrder, filteredDocuments: filtered });
   },
 
   syncDocuments: async () => {
@@ -274,4 +314,63 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ safetyEnabled: false });
     obs.warn('Document safety checks disabled - placeholder data may be allowed');
   },
+
+  setViewMode: (mode: 'grid' | 'list') => {
+    set({ viewMode: mode });
+  },
 }));
+
+// Helper function to apply filters and sorting
+function applyFiltersAndSort(
+  documents: DocumentMetadata[],
+  searchQuery: string,
+  filterType: string,
+  filterTags: string[],
+  sortBy: 'date' | 'name' | 'size' | 'type',
+  sortOrder: 'asc' | 'desc'
+): DocumentMetadata[] {
+  let filtered = [...documents];
+
+  // Apply search filter
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    filtered = filtered.filter((d) =>
+      d.title.toLowerCase().includes(query) ||
+      d.tags?.some((t) => t.toLowerCase().includes(query))
+    );
+  }
+
+  // Apply type filter
+  if (filterType && filterType !== 'all') {
+    filtered = filtered.filter((d) => d.type === filterType);
+  }
+
+  // Apply tag filter
+  if (filterTags && filterTags.length > 0) {
+    filtered = filtered.filter((d) =>
+      filterTags.some((tag) => d.tags?.includes(tag))
+    );
+  }
+
+  // Apply sorting
+  filtered.sort((a, b) => {
+    let comparison = 0;
+    switch (sortBy) {
+      case 'date':
+        comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+        break;
+      case 'name':
+        comparison = a.title.localeCompare(b.title);
+        break;
+      case 'size':
+        comparison = (a.size || 0) - (b.size || 0);
+        break;
+      case 'type':
+        comparison = a.type.localeCompare(b.type);
+        break;
+    }
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  return filtered;
+}

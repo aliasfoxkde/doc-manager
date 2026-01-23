@@ -33,7 +33,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
   initializeThemeListener: () => {
     // Apply initial theme
-    const { theme, resolvedTheme } = get();
+    const { resolvedTheme } = get();
     applyTheme(resolvedTheme);
 
     // Listen for system theme changes

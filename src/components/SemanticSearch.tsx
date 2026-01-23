@@ -6,6 +6,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { embeddingService } from '../services/embeddingService';
 import { vectorStore } from '../services/vectorStore';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 interface SearchResult {
   documentId: string;
@@ -52,10 +55,10 @@ export function SemanticSearch({
 
         if (mounted) {
           setIsReady(true);
-          console.log('[SemanticSearch] Initialized');
+          obs.info('SemanticSearch initialized');
         }
       } catch (error) {
-        console.error('[SemanticSearch] Failed to initialize:', error);
+        obs.error('SemanticSearch failed to initialize', error as Error);
       }
     };
 
@@ -104,7 +107,7 @@ export function SemanticSearch({
 
       setResults(searchResults);
     } catch (error) {
-      console.error('[SemanticSearch] Search failed:', error);
+      obs.error('SemanticSearch failed', error as Error);
       setResults([]);
     } finally {
       setIsLoading(false);
@@ -127,12 +130,6 @@ export function SemanticSearch({
     if (onResultClick) {
       onResultClick(result.documentId);
     }
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 0.8) return 'high';
-    if (score >= 0.6) return 'medium';
-    return 'low';
   };
 
   return (

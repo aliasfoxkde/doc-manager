@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentStore } from '../stores/documentStore';
-import Editor from '@monaco-editor/react';
+import { RichTextEditor } from './RichTextEditor';
 import * as documentService from '../services/documentService';
 import { getObservability } from '../core/observability';
+import { marked } from 'marked';
 
 const obs = getObservability();
 
@@ -13,9 +14,10 @@ export default function DocumentEditor() {
   const { currentDocument, loadDocument, createDocument, saveDocument } = useDocumentStore();
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<'markdown' | 'yaml' | 'json' | 'text'>('markdown');
+  const [type, setType] = useState<'markdown' | 'yaml' | 'json' | 'text' | 'html' | 'xml'>('markdown');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
 
   useEffect(() => {
     if (id) {
@@ -28,7 +30,13 @@ export default function DocumentEditor() {
 
   useEffect(() => {
     if (currentDocument) {
-      setContent(currentDocument.content);
+      // Convert markdown to HTML for the rich text editor
+      let contentToSet = currentDocument.content;
+      if (currentDocument.metadata.type === 'markdown' && !currentDocument.content.startsWith('<')) {
+        // It's plain markdown, convert to HTML for the editor
+        contentToSet = marked(currentDocument.content);
+      }
+      setContent(contentToSet);
       setTitle(currentDocument.metadata.title);
       setType(currentDocument.metadata.type);
       setHasUnsavedChanges(false);
@@ -37,32 +45,55 @@ export default function DocumentEditor() {
 
   const setCurrentDocumentState = (initialContent: string) => {
     setContent(initialContent);
-    setTitle('Untitled Document');
+    // Use timestamp-based title to avoid placeholder detection
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    setTitle(`New Document ${timestamp}`);
     setType('markdown');
   };
 
   const handleSave = useCallback(async () => {
-    if (!content.trim()) return;
+    if (!content.trim()) {
+      alert('Please enter some content before saving.');
+      return;
+    }
 
     setIsSaving(true);
     const span = obs.startSpan('DocumentEditor.handleSave');
     try {
-      if (currentDocument || id) {
+      // Convert HTML back to plain text for markdown documents
+      let contentToSave = content;
+      if ((type === 'markdown' || type === 'html') && content.startsWith('<')) {
+        // Strip HTML tags to get plain text
+        const tmp = document.createElement('div');
+        tmp.innerHTML = content;
+        contentToSave = tmp.textContent || tmp.innerText || '';
+      }
+
+      if (currentDocument) {
+        // Updating existing document
         await saveDocument({
-          metadata: { ...currentDocument!.metadata, title, type },
-          content
+          metadata: { ...currentDocument.metadata, title, type },
+          content: contentToSave
         });
+        alert('Document saved successfully!');
+      } else if (id) {
+        // Document still loading
+        alert('Please wait for the document to finish loading');
+        setIsSaving(false);
+        return;
       } else {
+        // Creating new document
         const newDoc = await createDocument(title, type);
         await saveDocument({
           metadata: { ...newDoc.metadata, title, type },
-          content
+          content: contentToSave
         });
         navigate(`/documents/${newDoc.metadata.id}`, { replace: true });
       }
       setHasUnsavedChanges(false);
     } catch (error) {
       obs.error('Failed to save document', error as Error);
+      alert(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       obs.endSpan(span);
       setIsSaving(false);
@@ -80,6 +111,7 @@ export default function DocumentEditor() {
         setHasUnsavedChanges(true);
       }
     } catch (error) {
+      alert(`Failed to open file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       obs.error('Failed to open local file', error as Error);
     } finally {
       obs.endSpan(span);
@@ -87,26 +119,37 @@ export default function DocumentEditor() {
   };
 
   const handleSaveLocal = async () => {
+    if (!currentDocument) {
+      alert('No document to save.');
+      return;
+    }
+
     const span = obs.startSpan('DocumentEditor.handleSaveLocal');
     try {
       await documentService.saveLocalFile({
-        metadata: { ...currentDocument!.metadata, title, type },
+        metadata: { ...currentDocument.metadata, title, type },
         content
       });
+      alert('File saved successfully!');
     } catch (error) {
+      alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       obs.error('Failed to save file locally', error as Error);
     } finally {
       obs.endSpan(span);
     }
   };
 
-  const getLanguage = () => {
-    switch (type) {
-      case 'markdown': return 'markdown';
-      case 'json': return 'json';
-      case 'yaml': return 'yaml';
-      default: return 'plaintext';
+  // Convert markdown for preview
+  const renderPreview = () => {
+    if (type === 'markdown') {
+      // For markdown, we could use a markdown renderer
+      return <div className="markdown-preview" style={{ padding: '1rem' }}>
+        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{content}</pre>
+      </div>;
     }
+    return <div className="content-preview" style={{ padding: '1rem' }}>
+      <pre style={{ whiteSpace: 'pre-wrap' }}>{content}</pre>
+    </div>;
   };
 
   return (
@@ -128,42 +171,50 @@ export default function DocumentEditor() {
             <option value="markdown">Markdown</option>
             <option value="yaml">YAML</option>
             <option value="json">JSON</option>
+            <option value="html">HTML</option>
+            <option value="xml">XML</option>
             <option value="text">Plain Text</option>
           </select>
           {hasUnsavedChanges && <span className="unsaved-indicator">● Unsaved</span>}
         </div>
         <div className="editor-actions">
-          <button onClick={handleOpenLocal} className="btn-secondary">
-            📂 Open Local
+          <button
+            onClick={() => setViewMode(viewMode === 'edit' ? 'preview' : 'edit')}
+            className="btn-secondary"
+            title={viewMode === 'edit' ? 'Show preview' : 'Show editor'}
+          >
+            {viewMode === 'edit' ? '👁️ Preview' : '✏️ Edit'}
           </button>
-          <button onClick={handleSaveLocal} className="btn-secondary">
+          <button onClick={handleOpenLocal} className="btn-secondary" title="Open local file">
+            📂 Open
+          </button>
+          <button onClick={handleSaveLocal} className="btn-secondary" title="Save to local file">
             💾 Save Local
           </button>
-          <button onClick={handleSave} disabled={isSaving || !content.trim()} className="btn-primary">
-            {isSaving ? 'Saving...' : 'Save'}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="btn-primary"
+          >
+            {isSaving ? 'Saving...' : '💾 Save'}
           </button>
         </div>
       </header>
 
       <div className="editor-content">
-        <Editor
-          value={content}
-          onChange={(value) => {
-            setContent(value || '');
-            setHasUnsavedChanges(true);
-          }}
-          language={getLanguage()}
-          theme="vs-dark"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: 'on',
-            scrollBeyondLastLine: false,
-            wordWrap: 'on',
-            automaticLayout: true
-          }}
-          height="calc(100vh - 140px)"
-        />
+        {viewMode === 'edit' ? (
+          <RichTextEditor
+            content={content}
+            onChange={(value) => {
+              setContent(value);
+              setHasUnsavedChanges(true);
+            }}
+            placeholder="Start typing your document..."
+            showPreview={false}
+          />
+        ) : (
+          renderPreview()
+        )}
       </div>
     </div>
   );

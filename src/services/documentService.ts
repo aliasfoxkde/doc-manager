@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import { Document, DocumentMetadata } from '../types';
 import { nanoid } from 'nanoid';
-import { fileWatcherClient, FileWatcherFile } from './fileWatcherClient';
+import { fileWatcherClient } from './fileWatcherClient';
 
 const DB_NAME = 'doc-manager';
 const DB_VERSION = 1;
@@ -74,10 +74,48 @@ async function getDocument(id: string): Promise<Document> {
     const db = await dbPromise;
     const cached = await db.get(STORE_NAME, id);
 
-    // Use stored filename if available, otherwise reconstruct from type
-    const cachedFilename = (cached?.metadata as any)?.filename;
-    const docType = cached?.metadata?.type || 'markdown';
-    const filename = cachedFilename || `${filenameWithoutExt}.${getTypeExtension(docType)}`;
+    // Use stored filename if available
+    let filename = (cached?.metadata as any)?.filename;
+    let docType = cached?.metadata?.type;
+
+    // If not cached, find the actual file from the file watcher API
+    if (!filename) {
+      try {
+        const allFiles = await fileWatcherClient.getAllFiles();
+        // Find the file that matches our category and filename (without extension)
+        const matchingFile = allFiles.find(f =>
+          f.category === category &&
+          f.filename.replace(/\.[^/.]+$/, '') === filenameWithoutExt
+        );
+
+        if (matchingFile) {
+          filename = matchingFile.filename;
+          docType = matchingFile.type;
+        } else {
+          // Fallback: try common extensions
+          const extensions = ['md', 'txt', 'json', 'yaml', 'html'];
+          for (const ext of extensions) {
+            try {
+              const testFilename = `${filenameWithoutExt}.${ext}`;
+              await fileWatcherClient.getFile(category, testFilename);
+              filename = testFilename;
+              docType = ext === 'md' ? 'markdown' : ext === 'yaml' || ext === 'yml' ? 'yaml' : 'text';
+              break;
+            } catch {
+              // Try next extension
+            }
+          }
+        }
+      } catch {
+        // If file watcher fails, default to markdown
+        filename = `${filenameWithoutExt}.md`;
+        docType = 'markdown';
+      }
+    }
+
+    if (!filename) {
+      throw new Error('Document not found');
+    }
 
     const fileData = await fileWatcherClient.getFile(category, filename);
 
@@ -86,7 +124,7 @@ async function getDocument(id: string): Promise<Document> {
       metadata: {
         id: `fw-${fileWatcherId}`,
         title: filenameWithoutExt,
-        type: docType as any,
+        type: (docType || 'markdown') as any,
         createdAt: fileData.metadata.created,
         updatedAt: fileData.metadata.modified,
         size: fileData.metadata.size,
@@ -110,18 +148,6 @@ async function getDocument(id: string): Promise<Document> {
   const doc = await db.get(STORE_NAME, id);
   if (!doc) throw new Error('Document not found');
   return doc;
-}
-
-// Helper: Get file extension from document type
-function getTypeExtension(type: string): string {
-  switch (type) {
-    case 'markdown': return 'md';
-    case 'html': return 'html';
-    case 'json': return 'json';
-    case 'yaml': return 'yaml';
-    case 'xml': return 'xml';
-    default: return 'txt';
-  }
 }
 
 async function createDocument(title: string, type: string): Promise<Document> {

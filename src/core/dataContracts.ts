@@ -24,8 +24,8 @@ import type {
 /**
  * Document Type Enum - restricts to known types
  */
-export const DocumentTypeSchema = z.enum(['markdown', 'yaml', 'json', 'text'], {
-  errorMap: () => ({ message: 'Document type must be one of: markdown, yaml, json, text' }),
+export const DocumentTypeSchema = z.enum(['markdown', 'yaml', 'json', 'text', 'html', 'xml'], {
+  errorMap: () => ({ message: 'Document type must be one of: markdown, yaml, json, text, html, xml' }),
 });
 
 /**
@@ -87,6 +87,14 @@ export const DocumentMetadataSchema = z.object({
     .max(100 * 1024 * 1024, 'Document size cannot exceed 100MB'),
 
   isSynced: z.boolean(),
+
+  filename: z.string()
+    .max(500, 'Filename cannot exceed 500 characters')
+    .optional(),
+
+  source: z.string()
+    .max(100, 'Source cannot exceed 100 characters')
+    .optional(),
 });
 
 /**
@@ -116,8 +124,8 @@ export const CreateDocumentInputSchema = z.object({
     .min(1, 'Title is required')
     .max(500, 'Title cannot exceed 500 characters'),
 
-  type: z.enum(['markdown', 'yaml', 'json', 'text'], {
-    errorMap: () => ({ message: 'Type must be one of: markdown, yaml, json, text' })
+  type: z.enum(['markdown', 'yaml', 'json', 'text', 'html', 'xml'], {
+    errorMap: () => ({ message: 'Type must be one of: markdown, yaml, json, text, html, xml' })
   }),
 });
 
@@ -287,8 +295,9 @@ export const documentValidationRules: ValidationRule<any>[] = [
       if (!doc.metadata?.title) return false;
       const title = doc.metadata.title.toLowerCase();
       const placeholderIndicators = [
-        'untitled', 'new document', 'sample', 'example', 'test',
-        'template', 'placeholder', 'dummy', 'lorem ipsum',
+        'untitled', 'new document', 'sample document', 'example document',
+        'template', 'placeholder', 'dummy document', 'lorem ipsum',
+        // Note: Don't include 'test' as it blocks legitimate titles like 'Test2', 'TestCase', etc.
       ];
       return !placeholderIndicators.some(indicator => title.includes(indicator));
     },

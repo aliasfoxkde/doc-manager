@@ -5,6 +5,9 @@
  */
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 interface VectorDBSchema extends DBSchema {
   embeddings: {
@@ -73,9 +76,9 @@ class VectorStore {
           store.createIndex('timestamp', 'metadata.timestamp');
         }
       });
-      console.log('[VectorStore] Database initialized');
+      obs.info('VectorStore database initialized');
     } catch (error) {
-      console.error('[VectorStore] Failed to initialize:', error);
+      obs.error('VectorStore failed to initialize', error as Error);
       throw error;
     }
   }
@@ -152,9 +155,9 @@ class VectorStore {
       }
 
       await tx.done;
-      console.log(`[VectorStore] Added ${chunks.length} chunks for document: ${title}`);
+      obs.info(`VectorStore added ${chunks.length} chunks for document: ${title}`);
     } catch (error) {
-      console.error('[VectorStore] Failed to add document:', error);
+      obs.error('VectorStore failed to add document', error as Error);
       throw error;
     }
   }
@@ -179,9 +182,9 @@ class VectorStore {
       }
 
       await tx.done;
-      console.log(`[VectorStore] Deleted ${count} chunks for document: ${documentId}`);
+      obs.info(`VectorStore deleted ${count} chunks for document: ${documentId}`);
     } catch (error) {
-      console.error('[VectorStore] Failed to delete document:', error);
+      obs.error('VectorStore failed to delete document', error as Error);
       throw error;
     }
   }
@@ -236,7 +239,7 @@ class VectorStore {
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
     } catch (error) {
-      console.error('[VectorStore] Search failed:', error);
+      obs.error('VectorStore failed to search', error as Error);
       throw error;
     }
   }
@@ -280,8 +283,8 @@ class VectorStore {
       const store = tx.objectStore('embeddings');
 
       const chunks = await store.getAll();
-      const documents = new Set(chunks.map(c => c.metadata.documentId || c.id.split('-chunk-')[0]));
-      const lastUpdated = Math.max(...chunks.map(c => c.metadata.timestamp), 0);
+      const documents = new Set(chunks.map((c: any) => c.documentId || c.id.split('-chunk-')[0]));
+      const lastUpdated = Math.max(...chunks.map((c: any) => c.metadata.timestamp), 0);
 
       await tx.done;
 
@@ -291,7 +294,7 @@ class VectorStore {
         lastUpdated
       };
     } catch (error) {
-      console.error('[VectorStore] Failed to get stats:', error);
+      obs.error('VectorStore failed to get stats', error as Error);
       throw error;
     }
   }
@@ -306,9 +309,9 @@ class VectorStore {
 
     try {
       await this.db.clear('embeddings');
-      console.log('[VectorStore] Cleared all embeddings');
+      obs.info('[VectorStore] Cleared all embeddings');
     } catch (error) {
-      console.error('[VectorStore] Failed to clear:', error);
+      obs.error('VectorStore failed to clear', error as Error);
       throw error;
     }
   }

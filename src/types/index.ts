@@ -1,13 +1,15 @@
 export interface DocumentMetadata {
   id: string;
   title: string;
-  type: 'markdown' | 'yaml' | 'json' | 'text';
+  type: 'markdown' | 'yaml' | 'json' | 'text' | 'html' | 'xml';
   createdAt: string;
   updatedAt: string;
   tags?: string[];
   path?: string;
   size: number;
   isSynced: boolean;
+  filename?: string;
+  source?: string;
 }
 
 export interface Document {

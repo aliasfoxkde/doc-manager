@@ -5,6 +5,9 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { ocrService } from '../services/ocrService';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 interface ImageUploadProps {
   onTextExtracted: (text: string, metadata: {
@@ -114,13 +117,13 @@ export function ImageUpload({ onTextExtracted, language = 'eng' }: ImageUploadPr
             timestamp: Date.now()
           });
         } catch (error) {
-          console.error(`Failed to process ${image.file.name}:`, error);
+          obs.error(`Failed to process image ${image.file.name}`, error as Error);
         }
       }
 
       setStatus('Processing complete!');
     } catch (error) {
-      console.error('OCR processing failed:', error);
+      obs.error('OCR processing failed', error as Error);
       setStatus('Processing failed. Please try again.');
     } finally {
       setIsProcessing(false);

@@ -5,6 +5,9 @@
  */
 
 import Tesseract from 'tesseract.js';
+import { getObservability } from '../core/observability';
+
+const obs = getObservability();
 
 class OCRService {
   private static instance: OCRService;
@@ -29,27 +32,27 @@ class OCRService {
     }
 
     try {
-      console.log('[OCR] Initializing Tesseract worker...');
+      obs.debug('[OCR] Initializing Tesseract worker...');
       this.worker = await Tesseract.createWorker(language, 1, {
         logger: (m: any) => {
           if (m.status === 'recognizing text') {
-            console.log(`[OCR] Progress: ${(m.progress * 100).toFixed(1)}%`);
+            obs.debug(`[OCR] Progress: ${(m.progress * 100).toFixed(1)}%`);
           } else if (m.status === 'loading tesseract core') {
-            console.log('[OCR] Loading Tesseract core...');
+            obs.debug('[OCR] Loading Tesseract core...');
           } else if (m.status === 'initializing tesseract') {
-            console.log('[OCR] Initializing Tesseract...');
+            obs.debug('[OCR] Initializing Tesseract...');
           } else if (m.status === 'initializing api') {
-            console.log('[OCR] Initializing API...');
+            obs.debug('[OCR] Initializing API...');
           } else if (m.status === 'loading language traineddata') {
-            console.log(`[OCR] Loading language data: ${language}`);
+            obs.debug(`[OCR] Loading language data: ${language}`);
           }
         }
       });
 
       this.initialized = true;
-      console.log('[OCR] Tesseract worker initialized');
+      obs.info('[OCR] Tesseract worker initialized');
     } catch (error) {
-      console.error('[OCR] Failed to initialize:', error);
+      obs.error('[OCR] Failed to initialize', error as Error);
       throw error;
     }
   }
@@ -69,7 +72,7 @@ class OCRService {
     }
 
     try {
-      console.log('[OCR] Processing image:', file.name, file.size, 'bytes');
+      obs.debug(`[OCR] Processing image: ${file.name} (${file.size} bytes)`);
 
       // Recognize text from image
       const result = await this.worker.recognize(file);
@@ -78,21 +81,17 @@ class OCRService {
       const confidence = result.data.confidence;
 
       // Extract line-level data with bounding boxes
-      const lines = result.data.lines.map((line: any) => ({
+      const lines = (result.data as any).lines?.map((line: any) => ({
         text: line.text,
         confidence: line.confidence,
-        bbox: line.bbox  // [x0, y0, x1, y1]
-      }));
+        bbox: line.bbox
+      })) || [];
 
-      console.log('[OCR] Extraction complete:', {
-        textLength: text.length,
-        confidence: confidence.toFixed(2) + '%',
-        lines: lines.length
-      });
+      obs.debug(`[OCR] Extraction complete: ${text.length} chars, ${confidence.toFixed(2)}%, ${lines.length} lines`);
 
       return { text, confidence, lines };
     } catch (error) {
-      console.error('[OCR] Failed to extract text:', error);
+      obs.error('[OCR] Failed to extract text', error as Error);
       throw error;
     }
   }
@@ -112,23 +111,23 @@ class OCRService {
     }
 
     try {
-      console.log('[OCR] Processing image URL:', url);
+      obs.debug(`[OCR] Processing image URL: ${url}`);
 
       const result = await this.worker.recognize(url);
 
       const text = result.data.text;
       const confidence = result.data.confidence;
-      const lines = result.data.lines.map((line: any) => ({
+      const lines = (result.data as any).lines?.map((line: any) => ({
         text: line.text,
         confidence: line.confidence,
         bbox: line.bbox
-      }));
+      })) || [];
 
-      console.log('[OCR] Extraction complete from URL');
+      obs.debug('[OCR] Extraction complete from URL');
 
       return { text, confidence, lines };
     } catch (error) {
-      console.error('[OCR] Failed to extract text from URL:', error);
+      obs.error('[OCR] Failed to extract text from URL', error as Error);
       throw error;
     }
   }
@@ -140,10 +139,11 @@ class OCRService {
   async extractTextFromPDF(file: File): Promise<{
     text: string;
     pages: Array<{ pageNum: number; text: string }>;
+    note?: string;
   }> {
     // For now, return a message about PDF support
     // Full PDF OCR would require additional setup
-    console.log('[OCR] PDF support - file:', file.name);
+    obs.debug(`[OCR] PDF support - file: ${file.name}`);
 
     return {
       text: '',
@@ -180,7 +180,7 @@ class OCRService {
       await this.worker.terminate();
       this.worker = null;
       this.initialized = false;
-      console.log('[OCR] Worker terminated');
+      obs.info('[OCR] Worker terminated');
     }
   }
 

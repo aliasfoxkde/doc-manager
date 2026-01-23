@@ -56,18 +56,45 @@ async function auditApp() {
 
     // Check for documents in the DOM
     console.log('\nCHECKING FOR DOCUMENT ELEMENTS:');
-    const docCards = await page.evaluate(function() {
-      const cards = document.querySelectorAll('.doc-card');
-      return Array.from(cards).map(function(el) {
-        return {
-          title: el.querySelector('.doc-card-content h4') ? el.querySelector('.doc-card-content h4').textContent : 'no title',
-          text: el.querySelector('.doc-card-content p') ? el.querySelector('.doc-card-content p').textContent : 'no text'
-        };
+    const docInfo = await page.evaluate(function() {
+      // Check for list view items
+      const listItems = document.querySelectorAll('.doc-list-item');
+      // Check for grid view cards
+      const gridCards = document.querySelectorAll('.doc-card');
+
+      const items = [];
+
+      listItems.forEach(function(el) {
+        const titleEl = el.querySelector('.doc-list-title');
+        const metaEl = el.querySelector('.doc-list-meta');
+        items.push({
+          title: titleEl ? titleEl.textContent : 'no title',
+          meta: metaEl ? metaEl.textContent : 'no meta',
+          view: 'list'
+        });
       });
+
+      gridCards.forEach(function(el) {
+        const titleEl = el.querySelector('.doc-card-content h4');
+        const metaEl = el.querySelector('.doc-card-content p');
+        items.push({
+          title: titleEl ? titleEl.textContent : 'no title',
+          meta: metaEl ? metaEl.textContent : 'no meta',
+          view: 'grid'
+        });
+      });
+
+      return {
+        listItems: listItems.length,
+        gridCards: gridCards.length,
+        items: items
+      };
     });
-    console.log('  Found ' + docCards.length + ' document cards');
-    docCards.forEach(function(card) {
-      console.log('    - ' + card.title);
+    console.log('  List view items: ' + docInfo.listItems);
+    console.log('  Grid view cards: ' + docInfo.gridCards);
+    console.log('  Total document elements: ' + docInfo.items.length);
+    docInfo.items.forEach(function(item) {
+      console.log('    - [' + item.view + '] ' + item.title);
     });
 
     // Check IndexedDB
@@ -167,60 +194,70 @@ async function auditApp() {
 
     // Test clicking on a document
     console.log('\nTESTING DOCUMENT CLICK:');
-    if (docCards.length > 0) {
-      console.log('  Clicking on first document: ' + docCards[0].title);
+    if (docInfo.items.length > 0) {
+      const firstDoc = docInfo.items[0];
+      console.log('  Clicking on first document: ' + firstDoc.title);
 
-      // Get the document ID from the first card
-      const firstDocId = await page.evaluate(function() {
-        const cards = document.querySelectorAll('.doc-card');
-        if (cards.length > 0) {
-          // Trigger click to navigate
-          cards[0].click();
-          // Also try to extract the href from react-router
-          return document.URL;
+      // Get the first clickable element (list or grid)
+      const clickResult = await page.evaluate(function() {
+        // Try list view first
+        const listItem = document.querySelector('.doc-list-item');
+        if (listItem) {
+          listItem.click();
+          return { clicked: true, type: 'list' };
         }
-        return null;
+        // Try grid view
+        const gridCard = document.querySelector('.doc-card');
+        if (gridCard) {
+          gridCard.click();
+          return { clicked: true, type: 'grid' };
+        }
+        return { clicked: false, type: 'none' };
       });
 
-      // Wait for navigation
-      await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(function() {
-        console.log('  (Navigation timeout or no navigation occurred)');
-      });
+      if (clickResult.clicked) {
+        console.log('  Clicked on: ' + clickResult.type + ' item');
 
-      // Check current URL
-      console.log('  Page URL after click: ' + page.url());
+        // Wait for navigation
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(function() {
+          console.log('  (Navigation timeout or no navigation occurred)');
+        });
 
-      // Check if editor loaded
-      const editorContent = await page.evaluate(function() {
-        const editor = document.querySelector('.monaco-editor');
-        if (!editor) {
-          // Check for content in the document view
-          const contentArea = document.querySelector('.editor-container');
-          return contentArea ? contentArea.innerText.substring(0, 500) : null;
+        // Check current URL
+        console.log('  Page URL after click: ' + page.url());
+
+        // Check if editor loaded
+        const editorContent = await page.evaluate(function() {
+          const editor = document.querySelector('.monaco-editor');
+          if (!editor) {
+            // Check for content in the document view
+            const contentArea = document.querySelector('.editor-container');
+            return contentArea ? contentArea.innerText.substring(0, 500) : null;
+          }
+
+          // Try to get the editor content
+          const lines = document.querySelectorAll('.view-line');
+          if (lines.length > 0) {
+            return Array.from(lines).map(function(line) {
+              return line.textContent.trim();
+            }).join('\n').substring(0, 500);
+          }
+          return null;
+        });
+
+        if (editorContent) {
+          console.log('  ✓ Content loaded successfully!');
+          console.log('    Preview: ' + editorContent.substring(0, 100) + (editorContent.length > 100 ? '...' : ''));
+        } else {
+          console.log('  ✗ No content found in editor');
         }
 
-        // Try to get the editor content
-        const lines = document.querySelectorAll('.view-line');
-        if (lines.length > 0) {
-          return Array.from(lines).map(function(line) {
-            return line.textContent.trim();
-          }).join('\n').substring(0, 500);
-        }
-        return null;
-      });
-
-      if (editorContent) {
-        console.log('  ✓ Content loaded successfully!');
-        console.log('    Preview: ' + editorContent.substring(0, 100) + (editorContent.length > 100 ? '...' : ''));
-      } else {
-        console.log('  ✗ No content found in editor');
+        // Check for Monaco editor
+        const hasMonaco = await page.evaluate(function() {
+          return document.querySelector('.monaco-editor') !== null;
+        });
+        console.log('  Monaco editor present: ' + (hasMonaco ? 'Yes' : 'No'));
       }
-
-      // Check for Monaco editor
-      const hasMonaco = await page.evaluate(function() {
-        return document.querySelector('.monaco-editor') !== null;
-      });
-      console.log('  Monaco editor present: ' + (hasMonaco ? 'Yes' : 'No'));
     } else {
       console.log('  No documents to test');
     }
