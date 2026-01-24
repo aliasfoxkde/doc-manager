@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentStore } from '../stores/documentStore';
-import { RichTextEditor } from './RichTextEditor';
+import CKEditorWrapper from './CKEditorWrapper';
 import * as documentService from '../services/documentService';
 import { getObservability } from '../core/observability';
 import { marked } from 'marked';
@@ -203,14 +203,13 @@ export default function DocumentEditor() {
 
       <div className="editor-content">
         {viewMode === 'edit' ? (
-          <RichTextEditor
+          <CKEditorWrapper
             content={content}
             onChange={(value) => {
               setContent(value);
               setHasUnsavedChanges(true);
             }}
             placeholder="Start typing your document..."
-            showPreview={false}
           />
         ) : (
           renderPreview()
